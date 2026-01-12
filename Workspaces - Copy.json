@@ -1,0 +1,9 @@
+{
+  "workspaces": [
+    {
+      "name": "Core",
+      "client_id": "Insert Vanta App ID",
+      "client_secret": "Insert Vanta App secret"
+    }
+  ]
+}
