@@ -6,7 +6,7 @@ Python tool to pull people from multiple Vanta workspaces and report device-moni
 - Python 3.9+
 - Install dependencies:
   ```bash
-  pip install requests openpyxl
+  pip install -r requirements.txt
   ```
 
 ## Configuration (`Workspaces.json`)
@@ -39,12 +39,13 @@ python "Device Monitoring.py" --config "Workspaces.json" --page-size 100 --out-p
 - `${out-prefix}__raw.csv` — one row per person per workspace
 - `${out-prefix}__consolidated.csv` — consolidated by email with per-workspace status columns
 - `${out-prefix}.xlsx` — Excel workbook with “Raw” and “Consolidated” sheets
+- Task metadata is exported in Excel/CSV-safe scalar fields; if Vanta returns nested metadata for `disabled`, it is normalized instead of written as a raw object.
 
 ## Data captured
 For each person:
 - Identity: `workspace`, `personId`, `emailAddress`, name fields
 - Employment: `status`, `startDate`, `endDate`
-- Device monitoring task: `status`, `completionDate`, `dueDate`, `disabled`, `installed` (bool), `daysOverdue` (when overdue + due date present)
+- Device monitoring task: `status`, `completionDate`, `dueDate`, scalar-friendly `disabled` metadata, `installed` (bool), `daysOverdue` (when overdue + due date present)
 
 ## Debugging tips
 - Use `--debug` to see auth outcome per workspace and per-person task lines.

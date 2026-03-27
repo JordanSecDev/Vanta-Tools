@@ -22,6 +22,7 @@ import csv
 import json
 import sys
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -152,20 +153,49 @@ def safe_get(d: Dict[str, Any], path: List[str], default=None):
     return cur
 
 
-from datetime import datetime, timezone
-
 def parse_iso_z(s: str):
     # Handles "2025-07-02T02:46:59.919Z"
-    if not s:
+    if not isinstance(s, str) or not s:
         return None
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+def serialise_scalar(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=True, sort_keys=True)
+    return str(value)
+
+
+def normalise_task_date(value: Any) -> Any:
+    if isinstance(value, str) or value is None:
+        return value
+    if isinstance(value, dict):
+        date_value = value.get("date")
+        if isinstance(date_value, str):
+            return date_value
+    return serialise_scalar(value)
+
+
+def normalise_disabled(value: Any) -> Tuple[Any, Any, Any]:
+    if value is None or isinstance(value, bool):
+        return value, None, None
+    if isinstance(value, dict):
+        return (
+            True,
+            serialise_scalar(value.get("reason")),
+            normalise_task_date(value.get("date")),
+        )
+    return bool(value), serialise_scalar(value), None
 
 def extract_install_device_monitoring(person: Dict[str, Any]) -> Dict[str, Any]:
     task = safe_get(person, ["tasksSummary", "details", "installDeviceMonitoring"], {}) or {}
 
     status = task.get("status")
-    completion = task.get("completionDate")
-    due = task.get("dueDate")
+    completion = normalise_task_date(task.get("completionDate"))
+    due = normalise_task_date(task.get("dueDate"))
+    disabled, disabled_reason, disabled_date = normalise_disabled(task.get("disabled"))
 
     installed = (status == "COMPLETE")
 
@@ -181,7 +211,9 @@ def extract_install_device_monitoring(person: Dict[str, Any]) -> Dict[str, Any]:
         "installDeviceMonitoring_status": status,
         "installDeviceMonitoring_completionDate": completion,
         "installDeviceMonitoring_dueDate": due,
-        "installDeviceMonitoring_disabled": task.get("disabled"),
+        "installDeviceMonitoring_disabled": disabled,
+        "installDeviceMonitoring_disabled_reason": disabled_reason,
+        "installDeviceMonitoring_disabled_date": disabled_date,
         "installDeviceMonitoring_installed": installed,
         "installDeviceMonitoring_daysOverdue": days_overdue,
     }
@@ -228,12 +260,12 @@ def write_xlsx(path: str, raw_rows: List[Dict[str, Any]], raw_fields: List[str],
     ws_raw.title = "Raw"
     ws_raw.append(raw_fields)
     for r in raw_rows:
-        ws_raw.append([r.get(k) for k in raw_fields])
+        ws_raw.append([serialise_scalar(r.get(k)) for k in raw_fields])
 
     ws_con = wb.create_sheet("Consolidated")
     ws_con.append(consolidated_fields)
     for r in consolidated_rows:
-        ws_con.append([r.get(k) for k in consolidated_fields])
+        ws_con.append([serialise_scalar(r.get(k)) for k in consolidated_fields])
 
     wb.save(path)
 
@@ -366,6 +398,7 @@ def main() -> int:
         "employment_status", "employment_startDate", "employment_endDate",
         "installDeviceMonitoring_status", "installDeviceMonitoring_completionDate",
         "installDeviceMonitoring_dueDate", "installDeviceMonitoring_disabled",
+        "installDeviceMonitoring_disabled_reason", "installDeviceMonitoring_disabled_date",
         "installDeviceMonitoring_installed", "installDeviceMonitoring_daysOverdue",
     ]
 
